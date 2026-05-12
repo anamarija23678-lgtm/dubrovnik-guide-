@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DBK Guide">
+<meta name="description" content="Your complete local guide to Dubrovnik">
+<link rel="manifest" href="manifest.json">
+<title>Dubrovnik Local Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+:root {
+  --sea: #1a4a6b;
+  --sea-light: #2d7db3;
+  --sand: #f2e8d5;
+  --stone: #8a7d6b;
+  --pine: #2d5a3d;
+  --sunset: #e8734a;
+  --gold: #d4a843;
+  --dark: #0a1628;
+  --dark2: #0f2035;
+  --text: #1a1208;
+  --card: rgba(242,232,213,0.98);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--dark);
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+}
+
+/* SPLASH */
+#splash {
+  position: fixed;
+  inset: 0;
+  background: var(--dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.8s ease;
+}
+
+#splash.hidden { opacity: 0; pointer-events: none; }
+
+.splash-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 36px;
+  color: var(--sand);
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.splash-title span { color: var(--gold); font-style: italic; }
+
+.splash-sub {
+  font-size: 11px;
+  letter-spacing: 4px;
+  color: var(--stone);
+  text-transform: uppercase;
+  margin-bottom: 40px;
+}
+
+.splash-wave {
+  display: flex;
+  gap: 6px;
+}
+
+.splash-wave span {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--sea-light);
+  animation: wave 1.2s infinite;
+}
+
+.splash-wave span:nth-child(2) { animation-delay: 0.15s; }
+.splash-wave span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes wave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* APP */
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* NAV TABS */
+.nav {
+  background: var(--dark2);
+  display: flex;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.nav-tab {
+  flex: 1;
+  padding: 12px 4px 10px;
+  text-align: center;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+
+.nav-tab .nav-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+/* SCREENS */
+.screen { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.screen.active { display: flex; }
+
+/* MAP SCREEN */
+#map { flex: 1; }
+
+.map-filters {
+  background: var(--dark2);
+  padding: 8px 12px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.map-filters::-webkit-scrollbar { display: none; }
+
+.filter-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.filter-btn.active { background: var(--gold); border-color: var(--gold); color: var(--dark); font-weight: 500; }
+
+/* INFO CARD */
+.info-card {
+  position: absolute;
+  bottom: 60px;
+  left: 12px; right: 12px;
+  background: var(--card);
+  border-radius: 16px;
+  padding: 18px;
+  z-index: 1000;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  transform: translateY(200px);
+  transition: transform 0.4s cubic-bezier(0.34,1.2,0.64,1);
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.info-card.open { transform: translateY(0); }
+
+.card-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: rgba(0,0,0,0.08);
+  border: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--stone);
+}
+
+.card-cat {
+  font-size: 9px;
+  letter-spacing: 3px;
+  color: var(--stone);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.card-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  color: var(--text);
+  margin-bottom: 8px;
+  padding-right: 30px;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: #4a3d2a;
+  line-height: 1.7;
+  margin-bottom: 10px;
+}
+
+.card-insider {
+  background: rgba(212,168,67,0.12);
+  border-left: 3px solid var(--gold);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #5a4a20;
+  font-style: italic;
+  border-radius: 0 6px 6px 0;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.card-tags {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.tag {
+  background: rgba(26,74,107,0.1);
+  color: var(--sea);
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 10px;
+}
+
+.card-meta {
+  font-size: 11px;
+  color: var(--stone);
+  display: flex;
+  gap: 14px;
+}
+
+/* EXPLORE SCREEN */
+#screen-explore {
+  overflow-y: auto;
+  background: var(--dark);
+}
+
+.section-header {
+  padding: 20px 16px 10px;
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--sand);
+}
+
+.section-header span { color: var(--gold); font-style: italic; }
+
+.place-list {
+  padding: 0 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.place-item {
+  background: var(--dark2);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.place-item:hover { border-color: rgba(212,168,67,0.3); }
+
+.place-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.place-emoji { font-size: 22px; }
+
+.place-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  color: var(--sand);
+  flex: 1;
+}
+
+.place-day {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--stone);
+  text-transform: uppercase;
+}
+
+.place-desc-short {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.5;
+}
+
+/* HISTORY SCREEN */
+#screen-history {
+  overflow-y: auto;
+  background: var(--dark);
+  padding: 20px 16px;
+}
+
+.history-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  color: var(--sand);
+  margin-bottom: 6px;
+}
+
+.history-title span { color: var(--gold); font-style: italic; }
+
+.history-intro {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.7;
+  margin-bottom: 24px;
+  font-style: italic;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 36px;
+  bottom: -24px;
+  width: 1px;
+  background: rgba(255,255,255,0.06);
+}
+
+.timeline-item:last-child::before { display: none; }
+
+.timeline-year {
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.year-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 11px;
+  color: var(--gold);
+  background: rgba(212,168,67,0.1);
+  border: 1px solid rgba(212,168,67,0.2);
+  border-radius: 6px;
+  padding: 4px 2px;
+  display: block;
+  text-align: center;
+}
+
+.timeline-content h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 15px;
+  color: var(--sand);
+  margin-bottom: 4px;
+}
+
+.timeline-content p {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.6;
+}
+
+/* TIPS SCREEN */
+#screen-tips {
+  overflow-y: auto;
+  background: var(--dark);
+  padding: 20px 16px;
+}
+
+.tips-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  color: var(--sand);
+  margin-bottom: 20px;
+}
+
+.tips-title span { color: var(--gold); font-style: italic; }
+
+.tip-card {
+  background: var(--dark2);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.tip-card h3 {
+  font-size: 14px;
+  color: var(--sand);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tip-card p {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.6;
+}
+
+/* MARKER STYLES */
+.m-pin {
+  width: 30px; height: 30px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,0.8);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.m-pin .mi { transform: rotate(45deg); font-size: 13px; }
+.m-beach { background: #2d7db3; }
+.m-food { background: #e8734a; }
+.m-sight { background: #2d5a3d; }
+.m-hidden { background: #d4a843; }
+.m-nightlife { background: #7b2d8b; }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-title">Dubrovnik <span>Guide</span></div>
+  <div class="splash-sub">From check-in to check-out</div>
+  <div class="splash-wave">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<div id="app">
+  <div class="nav">
+    <div class="nav-tab active" onclick="showScreen('map', this)">
+      <span class="nav-icon">🗺</span>Map
+    </div>
+    <div class="nav-tab" onclick="showScreen('explore', this)">
+      <span class="nav-icon">🔍</span>Explore
+    </div>
+    <div class="nav-tab" onclick="showScreen('history', this)">
+      <span class="nav-icon">🏛</span>History
+    </div>
+    <div class="nav-tab" onclick="showScreen('tips', this)">
+      <span class="nav-icon">💬</span>Tips
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="screen active" id="screen-map">
+    <div class="map-filters">
+      <button class="filter-btn active" onclick="filterMap('all',this)">All</button>
+      <button class="filter-btn" onclick="filterMap('sight',this)">🏛 Sights</button>
+      <button class="filter-btn" onclick="filterMap('beach',this)">🏖 Beaches</button>
+      <button class="filter-btn" onclick="filterMap('food',this)">🍽 Food</button>
+      <button class="filter-btn" onclick="filterMap('hidden',this)">✦ Hidden</button>
+      <button class="filter-btn" onclick="filterMap('nightlife',this)">🌙 Nightlife</button>
+    </div>
+    <div id="map"></div>
+    <div class="info-card" id="info-card">
+      <button class="card-close" onclick="closeCard()">×</button>
+      <div class="card-cat" id="c-cat"></div>
+      <div class="card-title" id="c-title"></div>
+      <div class="card-desc" id="c-desc"></div>
+      <div class="card-insider" id="c-insider"></div>
+      <div class="card-tags" id="c-tags"></div>
+      <div class="card-meta" id="c-meta"></div>
+    </div>
+  </div>
+
+  <!-- EXPLORE -->
+  <div class="screen" id="screen-explore">
+    <div class="section-header">Explore <span>Dubrovnik</span></div>
+    <div class="place-list" id="place-list"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="screen" id="screen-history">
+    <div class="history-title">City <span>History</span></div>
+    <div class="history-intro">Dubrovnik — once the Republic of Ragusa — was one of the most sophisticated city-states in medieval Europe. A maritime powerhouse that rivaled Venice without ever being conquered.</div>
+    <div id="timeline"></div>
+  </div>
+
+  <!-- TIPS -->
+  <div class="screen" id="screen-tips">
+    <div class="tips-title">Local <span>Tips</span></div>
+    <div id="tips-list"></div>
+  </div>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────
+
+const PLACES = [
+  { id:1, name:"City Walls", lat:42.6412, lng:18.1094, type:"sight", day:1,
+    desc:"The most complete medieval city walls in the world — 1940 meters, 6 towers, 3 bastions. Built between 13th–17th century.",
+    insider:"Walk them at 8am sharp when they open. By 10am it's a queue. Sunset walk is magical but book in advance.",
+    tags:["UNESCO","Walls","Photography"], best:"Sunrise or Sunset", crowd:"Very high in season" },
+
+  { id:2, name:"Stradun", lat:42.6407, lng:18.1076, type:"sight", day:1,
+    desc:"The main limestone-paved promenade of the Old Town. Lined with baroque buildings rebuilt after the 1667 earthquake.",
+    insider:"Walk it at 7am when locals are having coffee. At noon it's a sea of tourists. The marble is genuinely slippery when wet.",
+    tags:["Promenade","Baroque","Cafes"], best:"Early morning", crowd:"Always busy" },
+
+  { id:3, name:"Lokrum Island", lat:42.6264, lng:18.1231, type:"hidden", day:1,
+    desc:"A 10-minute ferry from the Old Port. Botanical garden, a saltwater Dead Sea lake, peacocks, and a rocky nudist beach.",
+    insider:"Bring a picnic. The ferry runs every 30 min. Last ferry back is 18:00 in low season — check the board. No overnight stays allowed.",
+    tags:["Island","Nature","Swimming","Peacocks"], best:"Full day", crowd:"Moderate" },
+
+  { id:4, name:"Fort Lovrijenac", lat:42.6399, lng:18.1035, type:"sight", day:1,
+    desc:"The fortress outside the western walls, built in 1018 to prevent Venetian occupation. Now hosts Shakespeare's Hamlet every summer.",
+    insider:"Entry is included in the city walls ticket. The view from the top back toward the Old Town at sunset is the best photo in Dubrovnik.",
+    tags:["Fortress","Views","Theatre"], best:"Late afternoon", crowd:"Moderate" },
+
+  { id:5, name:"Banje Beach", lat:42.6440, lng:18.1175, type:"beach", day:1,
+    desc:"The closest beach to the Old Town. Pebble beach with crystal clear water and a perfect view of the city walls.",
+    insider:"The LEFT section is free public beach. Skip the beach club unless you want to pay €20+ for a sunbed. Arrive before 9am for a good spot.",
+    tags:["Swimming","Views","Pebble"], best:"Morning", crowd:"Very busy in July-Aug" },
+
+  { id:6, name:"Buža Bar", lat:42.6390, lng:18.1115, type:"nightlife", day:1,
+    desc:"A bar literally cut into the city walls, with tables on the rocks above the sea. One of the most unique bar settings in Europe.",
+    insider:"There are two Buža bars — the original (cheaper) and the 'new' one. Both are accessed through hidden holes in the city walls. Find the signs.",
+    tags:["Bar","Sea","Views","Unique"], best:"Sunset", crowd:"Always a queue at sunset" },
+
+  { id:7, name:"Cavtat", lat:42.5783, lng:18.2183, type:"sight", day:2,
+    desc:"A charming fishing village 15km south. Beautiful waterfront promenade, clear bays for swimming, and far fewer tourists than Dubrovnik.",
+    insider:"Take the boat from Dubrovnik Old Port (45 min) instead of the bus. The approach from the sea is stunning. Return by bus if you want.",
+    tags:["Village","Boat","Swimming","Promenade"], best:"Full day", crowd:"Low" },
+
+  { id:8, name:"Župa Dubrovačka", lat:42.6250, lng:18.1800, type:"beach", day:2,
+    desc:"A series of coves and small beaches east of Dubrovnik. Srebreno and Mlini are the main villages — calmer and cheaper than the city.",
+    insider:"Locals come here. Parking is easy, restaurants are half the price of the Old Town, and the water is the same Adriatic.",
+    tags:["Local","Beaches","Calm"], best:"Full day", crowd:"Low to moderate" },
+
+  { id:9, name:"Mount Srđ", lat:42.6583, lng:18.1008, type:"sight", day:2,
+    desc:"The mountain directly above Dubrovnik. Take the cable car for a panoramic view over the Old Town, the islands, and all the way to Bosnia.",
+    insider:"The cable car gets crowded. The hiking path (1h up) is free and ends at the same spot. Go early, carry water. The fortress at the top has a war museum worth visiting.",
+    tags:["Views","Hiking","Cable car","Panorama"], best:"Morning or late afternoon", crowd:"High" },
+
+  { id:10, name:"Konoba Dubrava", lat:42.6520, lng:18.0870, type:"food", day:2,
+    desc:"Away from the tourist trail in the Lapad area. Fresh fish, local wine, honest prices — rare this close to Dubrovnik.",
+    insider:"Ask what came in that morning. Order the prstaci (date mussels) if available. Don't order pizza here — you're in Dalmatia.",
+    tags:["Seafood","Local","Wine","Affordable"], best:"Lunch or dinner", crowd:"Locals + some tourists" },
+
+  { id:11, name:"Trsteno Arboretum", lat:42.7317, lng:17.9514, type:"hidden", day:3,
+    desc:"The oldest arboretum in Croatia, 20km north of Dubrovnik. 500-year-old plane trees, Renaissance gardens, fountains, and sea views.",
+    insider:"This was used as King's Landing gardens in Game of Thrones. Almost nobody comes here. Bus 12 from the bus station. 1.5 hours is enough.",
+    tags:["Nature","Game of Thrones","Gardens","History"], best:"Morning", crowd:"Very low" },
+
+  { id:12, name:"Peljesac Bridge", lat:42.9050, lng:17.5356, type:"sight", day:3,
+    desc:"Europe's longest bridge over the sea — opened 2022. Connects mainland Croatia bypassing Bosnia. The engineering is remarkable.",
+    insider:"Worth a quick stop if driving north. The view from below on a boat is better than from above. Visible from the Pelješac road.",
+    tags:["Engineering","Modern","Drive"], best:"Any time", crowd:"Low" },
+
+  { id:13, name:"Rector's Palace", lat:42.6402, lng:18.1107, type:"sight", day:1,
+    desc:"The seat of the Rector of the Republic of Ragusa. A Gothic-Renaissance palace housing the Cultural History Museum.",
+    insider:"The courtyard has free chamber concerts in summer evenings — check the board at the entrance. The museum is small but the building itself is worth the entry.",
+    tags:["Museum","Gothic","History","Music"], best:"Late afternoon", crowd:"Moderate" },
+
+  { id:14, name:"Old Port", lat:42.6418, lng:18.1148, type:"sight", day:1,
+    desc:"The historic harbour where boats have docked for centuries. Ferries to Lokrum, Cavtat, Korčula and Hvar depart from here.",
+    insider:"The fish market just outside the Ploče gate opens at 7am. Sit at one of the harbour cafes and watch the boats — best €2 coffee in the Old Town.",
+    tags:["Harbour","Ferries","Fish market","Coffee"], best:"Early morning", crowd:"Moderate" },
+
+  { id:15, name:"Lapad Beach", lat:42.6550, lng:18.0600, type:"beach", day:3,
+    desc:"The most accessible sandy-gravel beach near Dubrovnik, in the Lapad peninsula. Family-friendly, with cafes and shallow water.",
+    insider:"Much more relaxed than Banje. Plenty of shade. The Lapad promenade (Šetalište Kralja Zvonimira) is good for an evening walk with restaurants.",
+    tags:["Family","Sandy","Calm","Promenade"], best:"Afternoon", crowd:"Moderate" },
+];
+
+const HISTORY = [
+  { year:"614", title:"Foundation", text:"Ragusium founded by Roman refugees from Epidaurum (today's Cavtat), fleeing Slavic and Avar raids. Built on a small rocky islet separated from the mainland." },
+  { year:"1000", title:"Under Byzantine influence", text:"The city develops maritime trade under nominal Byzantine protection, slowly building its fleet and commercial networks across the Mediterranean." },
+  { year:"1205", title:"Venetian rule begins", text:"After the Fourth Crusade, Dubrovnik falls under Venetian control. Despite this, the city retains significant autonomy and begins accumulating wealth." },
+  { year:"1358", title:"The Republic of Ragusa", text:"Dubrovnik breaks free from Venice with Hungarian support and becomes a fully independent republic. The golden age of Ragusan diplomacy begins." },
+  { year:"1418", title:"Abolition of slavery", text:"The Republic of Ragusa becomes one of the first states in Europe to ban the slave trade — over 400 years before many Western nations." },
+  { year:"1667", title:"The Great Earthquake", text:"A catastrophic earthquake kills a third of the population and destroys most of the medieval city. The baroque city we see today was rebuilt from these ruins." },
+  { year:"1806", title:"Napoleon ends the Republic", text:"Napoleon's forces occupy Dubrovnik and formally dissolve the Republic of Ragusa after 450 years of independence. The city never regains sovereignty." },
+  { year:"1991", title:"Siege of Dubrovnik", text:"During Croatian independence, Yugoslav forces lay siege to and shell the city. The bombardment of a UNESCO World Heritage site shocks the world and turns international opinion." },
+  { year:"1994", title:"UNESCO restoration complete", text:"The city walls and Old Town are largely restored. Dubrovnik begins its transformation into one of Europe's premier tourist destinations." },
+];
+
+const TIPS = [
+  { icon:"⏰", title:"When to visit", text:"May, June and September are ideal. July-August: 10,000+ cruise ship passengers per day flood the Old Town. Avoid midday in high season entirely." },
+  { icon:"💶", title:"Money", text:"Croatia uses the Euro since 2023. Cards accepted almost everywhere. ATMs in the Old Town charge higher fees — use machines near Konzum supermarket in Lapad." },
+  { icon:"🚌", title:"Getting around", text:"Bus line 1a/1b connects Pile Gate (Old Town entrance) with Lapad every 20 minutes. Taxi from airport: official price ~€35, negotiate before you get in. Uber works here." },
+  { icon:"🌡", title:"Heat", text:"Summer temperatures regularly hit 35°C. The Old Town's marble streets reflect heat intensely. Start early, rest at midday, go out again at 5pm. Always carry water." },
+  { icon:"📸", title:"Photography", text:"Best light: 6-8am and 6-8pm. The walls glow orange at sunset. For the classic Dubrovnik view, take the cable car to Srđ or walk up Boskoviceva Street." },
+  { icon:"🍷", title:"Eating & drinking", text:"The closer to Stradun, the more expensive. Walk one street back for half the price. Local wine: Plavac Mali (red) and Pošip (white) from Pelješac and Korčula." },
+  { icon:"👟", title:"Footwear", text:"The marble pavements are beautiful and extremely slippery when wet or polished by millions of shoes. Wear shoes with grip. Sandals are fine in dry weather." },
+  { icon:"🎟", title:"City Walls ticket", text:"€35 per adult (2024 price). Includes Lovrijenac fortress. Book online to skip the queue. The ticket is checked multiple times — don't lose it." },
+  { icon:"📵", title:"Crowds strategy", text:"The cruise ships arrive 8am-5pm. If you're there overnight, you have the Old Town almost to yourself in the early morning and late evening. Use this." },
+  { icon:"🏖", title:"Best kept beach secret", text:"Sveti Jakov beach — 10 min walk east from Banje, down 100 steps. Less known, cleaner water, no beach clubs. Worth the walk and the climb back up." },
+];
+
+// ── MAP ───────────────────────────────────────────────────────────────
+
+const map = L.map('map', { zoomControl: false }).setView([42.645, 18.09], 13);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  subdomains: 'abcd', maxZoom: 19
+}).addTo(map);
+
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+const emoji = { sight:'🏛', beach:'🏖', food:'🍽', hidden:'✦', nightlife:'🌙' };
+let activeMarkers = [];
+let currentFilter = 'all';
+
+function makeIcon(type) {
+  return L.divIcon({
+    className: '',
+    html: `<div class="m-pin m-${type}"><span class="mi">${emoji[type]||'📍'}</span></div>`,
+    iconSize: [30,30], iconAnchor: [15,30], popupAnchor: [0,-30]
+  });
+}
+
+function renderMarkers() {
+  activeMarkers.forEach(m => map.removeLayer(m));
+  activeMarkers = [];
+  PLACES.forEach(p => {
+    if (currentFilter !== 'all' && p.type !== currentFilter) return;
+    const m = L.marker([p.lat, p.lng], { icon: makeIcon(p.type) }).addTo(map);
+    m.on('click', () => showCard(p));
+    activeMarkers.push(m);
+  });
+}
+
+function filterMap(type, btn) {
+  currentFilter = type;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMarkers();
+}
+
+function showCard(p) {
+  document.getElementById('c-cat').textContent = p.type.toUpperCase() + ' · DAY ' + p.day;
+  document.getElementById('c-title').textContent = p.name;
+  document.getElementById('c-desc').textContent = p.desc;
+  document.getElementById('c-insider').textContent = '💬 ' + p.insider;
+  document.getElementById('c-tags').innerHTML = p.tags.map(t=>`<span class="tag">${t}</span>`).join('');
+  document.getElementById('c-meta').innerHTML = `<span>🕐 ${p.best}</span><span>👥 ${p.crowd}</span>`;
+  document.getElementById('info-card').classList.add('open');
+  map.panTo([p.lat, p.lng]);
+}
+
+function closeCard() {
+  document.getElementById('info-card').classList.remove('open');
+}
+
+map.on('click', closeCard);
+renderMarkers();
+
+// ── EXPLORE LIST ──────────────────────────────────────────────────────
+
+function buildExplore() {
+  const list = document.getElementById('place-list');
+  PLACES.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'place-item';
+    div.innerHTML = `
+      <div class="place-item-header">
+        <span class="place-emoji">${emoji[p.type]||'📍'}</span>
+        <span class="place-name">${p.name}</span>
+        <span class="place-day">Day ${p.day}</span>
+      </div>
+      <div class="place-desc-short">${p.desc.substring(0,90)}...</div>
+    `;
+    div.onclick = () => {
+      showScreen('map', document.querySelector('.nav-tab'));
+      setTimeout(() => { showCard(p); map.setView([p.lat, p.lng], 15); }, 100);
+    };
+    list.appendChild(div);
+  });
+}
+
+// ── HISTORY ───────────────────────────────────────────────────────────
+
+function buildHistory() {
+  const tl = document.getElementById('timeline');
+  HISTORY.forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'timeline-item';
+    div.innerHTML = `
+      <div class="timeline-year"><span class="year-num">${h.year}</span></div>
+      <div class="timeline-content"><h3>${h.title}</h3><p>${h.text}</p></div>
+    `;
+    tl.appendChild(div);
+  });
+}
+
+// ── TIPS ──────────────────────────────────────────────────────────────
+
+function buildTips() {
+  const list = document.getElementById('tips-list');
+  TIPS.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'tip-card';
+    div.innerHTML = `<h3>${t.icon} ${t.title}</h3><p>${t.text}</p>`;
+    list.appendChild(div);
+  });
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────
+
+function showScreen(id, btn) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'map') setTimeout(() => map.invalidateSize(), 100);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+
+buildExplore();
+buildHistory();
+buildTips();
+
+setTimeout(() => {
+  document.getElementById('splash').classList.add('hidden');
+}, 2000);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
